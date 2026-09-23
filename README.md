@@ -4,7 +4,7 @@
 
 This repo is a TypeScript example of mobile browser automation.
 It runs four test files against the Playwright documentation site.
-*Browser:* Tests run on real Chrome on an Android emulator, using Appium 3 and WebdriverIO 9 (Mocha).
+*Browser:* Tests run on Chrome using an Android emulator, with Appium 3 and WebdriverIO 9 (Mocha).
 
 This is a CI-only project: the tests run on GitHub Actions, not on a local machine.
 
@@ -45,26 +45,7 @@ A run takes about 5 minutes.
 
 ## Design notes
 
-Same structure as the Playwright suite it was ported from: Page Object Models with composed components.
-
-```
-tests/
-  components/   TopNav, LeftSideNav           shared UI components
-  pages/        BasePage -> *SectionPage -> page objects
-  fixtures/     setup functions: create a page object and navigate to it
-  smoke-tests/  search-tests/                 specs, one tagged describe block per file
-```
-
-Where the port differs from the Playwright original, and why:
-
-| Area | Playwright | Here | Why |
-|---|---|---|---|
-| Fixtures | `test.extend({...})` | `fixtures.homePage()` etc., called from `beforeEach` | Mocha has no fixture system |
-| Tags | `{ tag: '@smoke' }` | `@smoke` at the end of the `describe` title, filtered with `--mochaOpts.grep` | Mocha has no tag option |
-| Nav menus | Links visible in the header and sidebar | `topNav.open()` / `leftSideNav.open()` step before using links | At phone width, playwright.dev collapses both into the hamburger menu |
-| Search submit | `searchBar.press('Enter')` | `topNav.pressKeyboardSearchKey()` | On Android a WebDriver Enter arrives mid-IME-composition and the search modal ignores it. The keyboard's Search key (`mobile: performEditorAction`) is what a real user presses |
-| Locators | `getByRole(...)` | CSS scoped by `aria-label`, link text (`=Docs`), `h1=Heading` | WebdriverIO has no role+name locator. Elements are getters, the WebdriverIO convention |
-| URL checks | `toHaveURL('/docs/intro')` | `toHaveUrl(fullUrl('/docs/intro'))` | WebdriverIO's `toHaveUrl` doesn't resolve paths against `baseUrl` |
+Page Object Models with composed components.
 
 ## Configuration options
 
@@ -81,8 +62,8 @@ Where the port differs from the Playwright original, and why:
 `TEST_TARGET` in `wdio.conf.ts` selects `emulator` (default, what CI uses) or `cloud`. The specs
 are the same for both. Only the capabilities change. `cloud` connects to a remote Appium grid
 and reads `CLOUD_HOSTNAME`, `CLOUD_USER`, `CLOUD_KEY` and optionally `CLOUD_DEVICE` /
-`CLOUD_PLATFORM_VERSION` (set them as repository secrets). The `cloud` target is configured
-but untested.
+`CLOUD_PLATFORM_VERSION`. The workflow only runs `emulator`: to use `cloud`, store those values
+as repository secrets and pass them, with `TEST_TARGET: cloud`, as `env` on a test step.
 
 ## Gotchas
 
