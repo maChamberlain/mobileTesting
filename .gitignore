@@ -2,3 +2,4 @@ node_modules/
 logs/
 screenshots/
 .claude/settings.local.json
+STATUS.md
