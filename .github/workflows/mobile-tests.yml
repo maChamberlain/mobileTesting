@@ -19,14 +19,14 @@ jobs:
     # Linux runners support KVM, which the x86_64 emulator needs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -48,13 +48,13 @@ jobs:
 
       # Snapshot of a booted emulator, so later runs skip the cold boot
       - name: Cache AVD
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: avd-cache
         with:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ env.API_LEVEL }}-google_apis-x86_64-pixel_7
+          key: avd-${{ env.API_LEVEL }}-google_apis-x86_64-pixel_7-ram4g
 
       - name: Create AVD and generate snapshot
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -64,6 +64,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_7
+          # Chrome crashed ("not connected to DevTools") with the default RAM
+          ram-size: 4096M
+          cores: 4
           avd-name: ${{ env.AVD_NAME }}
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -77,6 +80,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_7
+          # Chrome crashed ("not connected to DevTools") with the default RAM
+          ram-size: 4096M
+          cores: 4
           avd-name: ${{ env.AVD_NAME }}
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -84,7 +90,7 @@ jobs:
           # The emulator is already booted here, so the `appium:avd` capability reuses it
           script: npm test
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: test-output

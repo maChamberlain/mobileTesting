@@ -97,6 +97,9 @@ export const config: WebdriverIO.Config = {
     logLevel: 'warn',
     outputDir: './logs',
     bail: 0,
+    // Mocha's retries don't cover hooks, and the CI emulator occasionally loses
+    // Chrome mid-spec ("not connected to DevTools"). Rerun the whole spec file on CI.
+    specFileRetries: process.env.CI ? 1 : 0,
     waitforTimeout: 15_000,
     connectionRetryTimeout: 180_000,
     connectionRetryCount: 1,
