@@ -1,33 +1,20 @@
 # Mobile browser testing
 
-Automated tests that drive **real Chrome on Android** using Appium 3, WebdriverIO 9 (Mocha) and TypeScript.
-By default they run on a local Android emulator (`pixel7_api34`).
+[![Mobile Chrome Tests](https://github.com/maChamberlain/mobileTesting/actions/workflows/mobile-tests.yml/badge.svg)](https://github.com/maChamberlain/mobileTesting/actions/workflows/mobile-tests.yml)
 
-> NOTE: All tests run against the Playwright documentation site (a third-party site):
-  https://playwright.dev/. They are mobile ports of the desktop Playwright suite in
-  `F:\Documents\code\projects\git\playwright`.
+This repo is a TypeScript example of mobile browser automation.
+It runs four test files against the Playwright documentation site.
+*Browser:* Tests run on real Chrome on an Android emulator, using Appium 3 and WebdriverIO 9 (Mocha).
 
-## Quick start
+This is a CI-only project: the tests run on GitHub Actions, not on a local machine.
 
-```powershell
-npm run doctor          # checks every prerequisite
-npm test                # boots the emulator if needed, starts Appium, runs the specs
-```
+## Running the tests
 
-`npm test` starts Appium itself through `@wdio/appium-service`, and the `appium:avd`
-capability boots the emulator if it isn't already running. You don't need to start either by hand.
+The workflow runs automatically on every push and pull request to `main`. To run it by hand,
+open the **Actions** tab, pick **Mobile Chrome Tests** and click **Run workflow**.
 
-## Scripts
-
-| Command | What it does |
-|---|---|
-| `npm test` / `npm run test:emulator` | Run all specs on the local emulator |
-| `npm run test:smoke` | Run only `@smoke` specs |
-| `npm run test:search` | Run only `@search` specs |
-| `npm run test:device` | Run the same specs on a USB-connected phone (set `DEVICE_UDID` if more than one is attached) |
-| `npm run avd:start` / `avd:stop` | Boot or shut down the emulator yourself (faster reruns if left running) |
-| `npm run avd:create` | Recreate the AVD (idempotent) |
-| `npm run doctor` | PASS/FAIL check of BIOS virtualization, AEHD, JDK, SDK, AVD, Appium, driver |
+Each run uploads a `test-output` artifact with `logs/` (`wdio-appium.log` is the useful one)
+and `screenshots/` (one per failed test).
 
 ## Test list
 
@@ -38,9 +25,27 @@ capability boots the emulator if it isn't already running. You don't need to sta
 | Leftside Nav Navigation | `@smoke` | Validates Docs sidebar items (Installation, Writing tests) navigate to the correct pages | `webdriver.left-nav-navigation.spec.ts` |
 | Basic Search | `@search` | Validates searching for 'mcp' navigates to the MCP Introduction page | `webdriver.basic-search.spec.ts` |
 
+`npm test` runs everything. `npm run test:smoke` and `npm run test:search` run one tag. To run a
+single tag in CI, change the `script:` line of the **Run tests on emulator** step.
+
+## How the pipeline works
+
+`.github/workflows/mobile-tests.yml`, on an `ubuntu-latest` runner:
+
+1. Enables KVM, which the x86_64 emulator needs
+2. Installs Node, Java 21, the npm packages and the Appium UiAutomator2 driver
+3. Type-checks the project (`npx tsc -p .`)
+4. Boots a `pixel7_api34` emulator (API 34, `google_apis`, x86_64, Pixel 7, 4 GB RAM, 4 cores)
+   with `reactivecircus/android-emulator-runner`. A snapshot of the booted emulator is cached,
+   so only the first run (or the first after the cache expires, 7 days unused) pays for a cold boot
+5. Runs `npm test`. `@wdio/appium-service` starts Appium, which attaches to the running emulator
+6. Uploads the `test-output` artifact
+
+A run takes about 5 minutes.
+
 ## Design notes
 
-Same structure as the Playwright suite: Page Object Models with composed components.
+Same structure as the Playwright suite it was ported from: Page Object Models with composed components.
 
 ```
 tests/
@@ -61,54 +66,33 @@ Where the port differs from the Playwright original, and why:
 | Locators | `getByRole(...)` | CSS scoped by `aria-label`, link text (`=Docs`), `h1=Heading` | WebdriverIO has no role+name locator. Elements are getters, the WebdriverIO convention |
 | URL checks | `toHaveURL('/docs/intro')` | `toHaveUrl(fullUrl('/docs/intro'))` | WebdriverIO's `toHaveUrl` doesn't resolve paths against `baseUrl` |
 
-## Targets
-
-`TEST_TARGET` selects `emulator` (default), `device` or `cloud` in `wdio.conf.ts`. The specs
-are the same for every target. Only the capabilities change. `cloud` reads `CLOUD_HOSTNAME`,
-`CLOUD_USER`, `CLOUD_KEY` and optionally `CLOUD_DEVICE` / `CLOUD_PLATFORM_VERSION`.
-
 ## Configuration options
 
 | Option | Setting |
 | --- | --- |
 | Base URL | `https://playwright.dev` |
-| Retry | 1 in CI (`CI` env var set) |
-| `.only` | Fails the run in CI |
+| Retry | 1 per test, plus 1 rerun of a whole failed spec file (Mocha retries don't cover hooks) |
+| `.only` | Fails the run |
 | Screenshot | On failure, `screenshots/FAILED_<test title>.png` |
-| Logs | `logs/` (`wdio-appium.log` is the useful one) |
+| Logs | `logs/` |
 
-## CI (GitHub Actions)
+## Targets
 
-`.github/workflows/mobile-tests.yml` runs the suite on every push/PR to `main` (and manually via
-*Run workflow*). It uses an `ubuntu-latest` runner, which supports KVM, plus
-`reactivecircus/android-emulator-runner` to boot the same `pixel7_api34` AVD (API 34,
-`google_apis`, x86_64, Pixel 7). The booted-emulator snapshot is cached, so only the first run
-pays for a cold boot. `logs/` and `screenshots/` are uploaded as the `test-output` artifact.
-On CI the `CI` env var enables 1 retry and `forbidOnly`.
-
-## Machine setup (already done on this PC)
-
-C: is nearly full, so everything lives under `F:\Android`: JDK 21, the Android SDK, the AVD
-images (`ANDROID_AVD_HOME`), Appium drivers (`APPIUM_HOME`) and chromedriver binaries.
-`wdio.conf.ts` sets these env vars itself. For running `adb`/`emulator`/`appium` by hand,
-dot-source `scripts/env.ps1` first.
-
-Emulator acceleration uses **AEHD** (Android Emulator Hypervisor Driver), which needs
-**SVM Mode** enabled in the BIOS. We chose it over WHPX so the Windows hypervisor doesn't
-run all the time. AEHD conflicts with Hyper-V, WSL2 and Docker Desktop. Google is deprecating
-it; if a future emulator drops support, switch to WHPX
-(`Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All`, admin + reboot).
+`TEST_TARGET` in `wdio.conf.ts` selects `emulator` (default, what CI uses) or `cloud`. The specs
+are the same for both. Only the capabilities change. `cloud` connects to a remote Appium grid
+and reads `CLOUD_HOSTNAME`, `CLOUD_USER`, `CLOUD_KEY` and optionally `CLOUD_DEVICE` /
+`CLOUD_PLATFORM_VERSION` (set them as repository secrets). The `cloud` target is configured
+but untested.
 
 ## Gotchas
 
 - **chromedriver must match the device's Chrome** (the emulator image ships Chrome 113).
-  Appium downloads the right one into `F:\Android\chromedriver` automatically. That only works
+  Appium downloads the right one into `~/.cache/chromedriver` automatically. That only works
   because the service starts Appium with `--allow-insecure uiautomator2:chromedriver_autodownload`.
   Appium 3 requires the `uiautomator2:` prefix, and the value must be a **string**: an array
   gets JSON-encoded and Appium silently ignores it.
 - **Enter doesn't submit some inputs on Android.** Typed text stays in an IME composition, and
   handlers that check `isComposing` ignore the key. Use the keyboard's action key instead
   (`mobile: performEditorAction`), as `TopNav.pressKeyboardSearchKey()` does.
-- **PowerShell 5.1 scripts must be pure ASCII** (or UTF-8 *with* BOM). A single em dash
-  in a BOM-less file breaks parsing with misleading "missing terminator" errors.
-- Don't use `2>&1` on native commands in PowerShell 5.1. Use `2>$null`.
+- **The CI emulator can lose Chrome mid-spec** (`disconnected: not connected to DevTools`).
+  The emulator's extra RAM and the spec-file retry are what keep this from failing runs.

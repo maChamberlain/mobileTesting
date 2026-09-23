@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  # Must match the AVD the tests expect (wdio.conf.ts -> AVD_NAME)
+  # Also read by wdio.conf.ts as the device name
   AVD_NAME: pixel7_api34
   API_LEVEL: 34
   # Keep drivers out of the project folder so package.json isn't modified
@@ -87,7 +87,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          # The emulator is already booted here, so the `appium:avd` capability reuses it
+          # Appium attaches to the emulator this step has already booted
           script: npm test
 
       - uses: actions/upload-artifact@v7

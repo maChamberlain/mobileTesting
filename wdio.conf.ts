@@ -2,29 +2,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-// Same specs, different targets. Only `capabilities` (and, for cloud, the
-// connection details) change between them.
-//   TEST_TARGET=emulator  (default) local AVD, Appium started by @wdio/appium-service
-//   TEST_TARGET=device    physical phone over USB (set DEVICE_UDID if more than one is attached)
+// Runs on GitHub Actions (.github/workflows/mobile-tests.yml), which boots the
+// emulator before `npm test`. Only `capabilities` (and, for cloud, the
+// connection details) change between targets:
+//   TEST_TARGET=emulator  (default) the CI emulator, Appium started by @wdio/appium-service
 //   TEST_TARGET=cloud     remote Appium grid (CLOUD_HOSTNAME, CLOUD_USER, CLOUD_KEY)
-type Target = 'emulator' | 'device' | 'cloud'
+type Target = 'emulator' | 'cloud'
 const target = (process.env.TEST_TARGET ?? 'emulator') as Target
 
-// On the Windows dev PC, mirror scripts/env.ps1 so `npm test` works without
-// dot-sourcing it first. Everything stays on F: — C: is nearly full.
-// Elsewhere (the Linux CI runner) the SDK, AVD and Appium use their own defaults.
-const isWindows = process.platform === 'win32'
-const ANDROID_ROOT = 'F:\\Android'
-if (isWindows) {
-    process.env.JAVA_HOME ??= `${ANDROID_ROOT}\\jdk-21`
-    process.env.ANDROID_HOME ??= `${ANDROID_ROOT}\\Sdk`
-    process.env.ANDROID_SDK_ROOT ??= `${ANDROID_ROOT}\\Sdk`
-    process.env.ANDROID_AVD_HOME ??= `${ANDROID_ROOT}\\avd`
-    process.env.APPIUM_HOME ??= `${ANDROID_ROOT}\\appium-home`
-}
-const chromedriverDir = isWindows
-    ? `${ANDROID_ROOT}\\chromedriver`
-    : path.join(os.homedir(), '.cache', 'chromedriver')
+const chromedriverDir = path.join(os.homedir(), '.cache', 'chromedriver')
 const avdName = process.env.AVD_NAME ?? 'pixel7_api34'
 
 const chromeBase = {
@@ -43,15 +29,6 @@ const capabilities: Record<Target, WebdriverIO.Capabilities> = {
     emulator: {
         ...chromeBase,
         'appium:deviceName': avdName,
-        // Boots the AVD if it isn't running yet; reuses it if it is.
-        'appium:avd': avdName,
-        'appium:avdLaunchTimeout': 300_000,
-        'appium:avdReadyTimeout': 300_000,
-    },
-    device: {
-        ...chromeBase,
-        'appium:deviceName': 'Android device',
-        ...(process.env.DEVICE_UDID ? { 'appium:udid': process.env.DEVICE_UDID } : {}),
     },
     cloud: {
         ...chromeBase,
@@ -60,7 +37,7 @@ const capabilities: Record<Target, WebdriverIO.Capabilities> = {
     },
 }
 
-const isLocal = target !== 'cloud'
+const useLocalAppium = target === 'emulator'
 
 export const config: WebdriverIO.Config = {
     runner: 'local',
@@ -70,7 +47,7 @@ export const config: WebdriverIO.Config = {
     maxInstances: 1,
     capabilities: [capabilities[target]],
 
-    ...(isLocal
+    ...(useLocalAppium
         ? {
               port: 4723,
               services: [
@@ -98,8 +75,8 @@ export const config: WebdriverIO.Config = {
     outputDir: './logs',
     bail: 0,
     // Mocha's retries don't cover hooks, and the CI emulator occasionally loses
-    // Chrome mid-spec ("not connected to DevTools"). Rerun the whole spec file on CI.
-    specFileRetries: process.env.CI ? 1 : 0,
+    // Chrome mid-spec ("not connected to DevTools"). Rerun the whole spec file.
+    specFileRetries: 1,
     waitforTimeout: 15_000,
     connectionRetryTimeout: 180_000,
     connectionRetryCount: 1,
@@ -108,10 +85,9 @@ export const config: WebdriverIO.Config = {
     reporters: ['spec'],
     mochaOpts: {
         ui: 'bdd',
-        // Fail the build on CI if a .only was left in the source code
-        forbidOnly: !!process.env.CI,
-        // Retry on CI only
-        retries: process.env.CI ? 1 : 0,
+        // Fail the build if a .only was left in the source code
+        forbidOnly: true,
+        retries: 1,
         // First session on a cold emulator installs the UiAutomator2 server APKs.
         timeout: 300_000,
     },
